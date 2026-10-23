@@ -5,6 +5,7 @@ on:
     paths:
       - 'app.py'
       - 'updater.py'
+      - 'game_detector.py'
       - '.github/workflows/release.yml'
   workflow_dispatch:
 permissions:
@@ -18,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install builder
-        run: python -m pip install --upgrade pyinstaller
+        run: python -m pip install --upgrade pyinstaller psutil
       - name: Build single portable EXE
         run: pyinstaller --noconfirm --clean --onefile --windowed --name sg0hann-FOV-Changer app.py
       - name: Generate SHA256 checksum
