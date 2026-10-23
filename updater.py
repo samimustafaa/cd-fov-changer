@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 from tkinter import messagebox
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 REPO = "samimustafaa/cd-fov-changer"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
 ASSET = "sg0hann-FOV-Changer-win64.zip"
