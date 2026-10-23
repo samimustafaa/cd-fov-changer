@@ -1,0 +1,42 @@
+name: Windows Release
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.py'
+      - 'updater.py'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install builder
+        run: python -m pip install --upgrade pyinstaller
+      - name: Build single portable EXE
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name sg0hann-FOV-Changer app.py
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/sg0hann-FOV-Changer.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash *sg0hann-FOV-Changer.exe" | Set-Content -Encoding ascii SHA256SUMS.txt
+      - name: Publish release for app version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Select-String -Path updater.py -Pattern '^VERSION = "([^"]+)"').Matches.Groups[1].Value
+          if (-not $version) { throw "Missing VERSION in updater.py" }
+          $tag = "v$version"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists. Increment VERSION in updater.py for a new update."
+            exit 0
+          }
+          gh release create $tag "dist/sg0hann-FOV-Changer.exe" "SHA256SUMS.txt" --target "${{ github.sha }}" --title "sg0hann FOV Changer $tag (Prototype)" --notes "Portable Windows EXE. Configuration-only prototype; Creative Destruction FOV compatibility is not verified. Close the game before editing. Back up your config."
