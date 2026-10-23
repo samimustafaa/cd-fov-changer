@@ -6,6 +6,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from updater import VERSION, check_for_updates
+from game_detector import detect_client, inspect_game_folder
 
 KEY = re.compile(r'(?im)^(?P<indent>[ \t]*)(?P<key>fov|fieldofview|camera_fov|camerafov|field_of_view)[ \t]*(?P<sep>[:=])[ \t]*(?P<value>[+-]?\d+(?:\.\d+)?)(?P<rest>[ \t]*(?:[;#].*)?)$')
 
@@ -13,18 +14,22 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f'sg0hann FOV Changer v{VERSION} — Prototype')
-        self.geometry('560x510')
-        self.minsize(530,490)
+        self.geometry('560x610')
+        self.minsize(530,590)
         self.configure(bg='#111318')
         self.path = tk.StringVar(value='No configuration file selected')
         self.value = tk.IntVar(value=90)
-        self.status = tk.StringVar(value='Select an existing game FOV config to begin.')
+        self.status = tk.StringVar(value='Waiting for client.exe. Read-only detection does not change FOV.')
+        self.game_status = tk.StringVar(value='Game: checking...')
+        self.detected = None
         s=ttk.Style(self)
         s.theme_use('clam')
         s.configure('TButton',padding=9,font=('Segoe UI',10))
         s.configure('Horizontal.TScale',background='#111318')
         tk.Label(self,text='sg0hann  /  FOV CHANGER',bg='#111318',fg='#f0f3f8',font=('Segoe UI',20,'bold')).pack(anchor='w',padx=26,pady=(24,6))
         tk.Label(self,text='Config-only prototype • game compatibility unverified',bg='#111318',fg='#a1a6b1',font=('Segoe UI',10)).pack(anchor='w',padx=26)
+        tk.Label(self,textvariable=self.game_status,bg='#111318',fg='#81bbff',font=('Segoe UI',10,'bold'),wraplength=490).pack(anchor='w',padx=26,pady=(15,0))
+        ttk.Button(self,text='Inspect game configuration locations (read only)',command=self.inspect).pack(fill='x',padx=26,pady=(8,0))
         panel=tk.Frame(self,bg='#1b1e26',padx=18,pady=18)
         panel.pack(fill='x',padx=26,pady=20)
         ttk.Button(panel,text='Select config file (.ini / .cfg / .txt)',command=self.select).pack(fill='x')
@@ -37,12 +42,29 @@ class App(tk.Tk):
         for f in (80,90,100,110):
             ttk.Button(row,text=str(f)+'°',command=lambda v=f:self.value.set(v)).pack(side='left',expand=True,fill='x',padx=3)
         buttons=tk.Frame(self,bg='#111318');buttons.pack(fill='x',padx=26)
-        ttk.Button(buttons,text='Apply (backup first)',command=self.apply).pack(side='left',expand=True,fill='x',padx=(0,5))
+        self.apply_button = ttk.Button(buttons,text='Apply (game closed only)',command=self.apply)
+        self.apply_button.pack(side='left',expand=True,fill='x',padx=(0,5))
         ttk.Button(buttons,text='Restore backup',command=self.restore).pack(side='left',expand=True,fill='x',padx=(5,0))
         ttk.Button(self,text='Check for updates',command=lambda:check_for_updates(self,manual=True)).pack(fill='x',padx=26,pady=(12,0))
         tk.Label(self,textvariable=self.status,bg='#111318',fg='#acb4c4',wraplength=490,justify='left',font=('Segoe UI',9)).pack(anchor='w',padx=26,pady=16)
         # Check asynchronously after the window is visible.
         self.after(1800, lambda:check_for_updates(self,manual=False))
+        self.after(300,self.poll_game)
+    def poll_game(self):
+        self.detected = detect_client()
+        if self.detected:
+            self.game_status.set('Game detected: client.exe (PID '+str(self.detected['pid'])+')')
+            self.apply_button.state(['disabled'])
+        else:
+            self.game_status.set('Game not running — config editing available only with game closed')
+            self.apply_button.state(['!disabled'])
+        self.after(2500,self.poll_game)
+    def inspect(self):
+        if not self.detected:
+            messagebox.showinfo('Game not detected','Launch Creative Destruction first to discover its installation folder.')
+            return
+        result=inspect_game_folder(self.detected['exe'])
+        messagebox.showinfo('Read-only inspection',result)
     def select(self):
         p=filedialog.askopenfilename(title='Choose an existing FOV config file',filetypes=[('Text config files','*.ini *.cfg *.txt'),('All files','*.*')])
         if not p:return
@@ -55,6 +77,9 @@ class App(tk.Tk):
             self.status.set('Found key: '+match.group('key')+'. Close the game before applying.')
         except Exception as e:self.status.set('Could not read file: '+str(e))
     def apply(self):
+        if detect_client():
+            messagebox.showwarning('Game running','Close client.exe before editing any game configuration.')
+            return
         p=Path(self.path.get())
         if not p.is_file():messagebox.showwarning('Select file','Choose a real config file first.');return
         try:
@@ -78,6 +103,9 @@ class App(tk.Tk):
             self.status.set(f'Saved {self.value.get()}°; original backed up. Game compatibility unverified.')
         except Exception as e:messagebox.showerror('No changes applied',str(e))
     def restore(self):
+        if detect_client():
+            messagebox.showwarning('Game running','Close client.exe before restoring any game configuration.')
+            return
         p=Path(self.path.get());backup=Path(str(p)+'.sg0hann-backup')
         if not backup.exists():messagebox.showwarning('No backup','No backup found for this file.');return
         if not messagebox.askyesno('Restore','Restore the original file from backup?'):return
