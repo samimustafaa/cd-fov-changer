@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 from tkinter import messagebox
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 REPO = "samimustafaa/cd-fov-changer"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
 ASSET = "sg0hann-FOV-Changer.exe"
