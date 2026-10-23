@@ -6,7 +6,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from updater import VERSION, check_for_updates
-from game_detector import detect_client, inspect_game_folder
+from game_detector import detect_client, inspect_game_folder, inspect_process_files
 
 KEY = re.compile(r'(?im)^(?P<indent>[ \t]*)(?P<key>fov|fieldofview|camera_fov|camerafov|field_of_view)[ \t]*(?P<sep>[:=])[ \t]*(?P<value>[+-]?\d+(?:\.\d+)?)(?P<rest>[ \t]*(?:[;#].*)?)$')
 
@@ -14,8 +14,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f'sg0hann FOV Changer v{VERSION} — Prototype')
-        self.geometry('560x610')
-        self.minsize(530,590)
+        self.geometry('560x650')
+        self.minsize(530,630)
         self.configure(bg='#111318')
         self.path = tk.StringVar(value='No configuration file selected')
         self.value = tk.IntVar(value=90)
@@ -30,6 +30,7 @@ class App(tk.Tk):
         tk.Label(self,text='Config-only prototype • game compatibility unverified',bg='#111318',fg='#a1a6b1',font=('Segoe UI',10)).pack(anchor='w',padx=26)
         tk.Label(self,textvariable=self.game_status,bg='#111318',fg='#81bbff',font=('Segoe UI',10,'bold'),wraplength=490).pack(anchor='w',padx=26,pady=(15,0))
         ttk.Button(self,text='Inspect game configuration locations (read only)',command=self.inspect).pack(fill='x',padx=26,pady=(8,0))
+        ttk.Button(self,text='Show active game file and module paths (read only)',command=self.inspect_active).pack(fill='x',padx=26,pady=(6,0))
         panel=tk.Frame(self,bg='#1b1e26',padx=18,pady=18)
         panel.pack(fill='x',padx=26,pady=20)
         ttk.Button(panel,text='Select config file (.ini / .cfg / .txt)',command=self.select).pack(fill='x')
@@ -64,7 +65,27 @@ class App(tk.Tk):
             messagebox.showinfo('Game not detected','Launch Creative Destruction first to discover its installation folder.')
             return
         result=inspect_game_folder(self.detected['exe'])
-        messagebox.showinfo('Read-only inspection',result)
+        self.show_report('Game installation files',result)
+    def show_report(self,title,report):
+        dialog=tk.Toplevel(self)
+        dialog.title(title)
+        dialog.geometry('810x550')
+        frame=tk.Frame(dialog)
+        frame.pack(fill='both',expand=True,padx=10,pady=10)
+        bar=tk.Scrollbar(frame)
+        bar.pack(side='right',fill='y')
+        area=tk.Text(frame,wrap='none',yscrollcommand=bar.set,font=('Consolas',10))
+        area.pack(fill='both',expand=True)
+        bar.config(command=area.yview)
+        area.insert('1.0',report)
+        area.configure(state='disabled')
+        ttk.Button(dialog,text='Close',command=dialog.destroy).pack(pady=(0,10))
+    def inspect_active(self):
+        game=detect_client()
+        if not game:
+            messagebox.showinfo('Game not running','Launch client.exe first, then inspect active files.')
+            return
+        self.show_report('OS-reported files for client.exe',inspect_process_files(game['pid']))
     def select(self):
         p=filedialog.askopenfilename(title='Choose an existing FOV config file',filetypes=[('Text config files','*.ini *.cfg *.txt'),('All files','*.*')])
         if not p:return
